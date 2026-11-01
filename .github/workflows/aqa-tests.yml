@@ -15,6 +15,16 @@ on:
           - api
           - all
         default: group-preorder
+      runner:
+        description: >
+          Where the job runs: "aws" is the self-hosted runner on my AWS EC2 instance, "github" a GitHub-hosted
+          runner, "default" follows the repository variable AQA_RUNNER (aws when it is set to aws, GitHub otherwise).
+        type: choice
+        options:
+          - default
+          - aws
+          - github
+        default: default
       custom_filter:
         description: >
           Optional Microsoft.Testing.Platform tree filter (overrides "scope" when set), e.g.
@@ -46,7 +56,9 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # The pipeline runs in AWS on a self-hosted runner (EC2, eu-north-1) while AQA_RUNNER=aws; without that variable
+    # it falls back to a GitHub-hosted runner, so the workflow keeps working after the AWS instance is gone.
+    runs-on: ${{ (inputs.runner == 'aws' || (inputs.runner != 'github' && vars.AQA_RUNNER == 'aws')) && fromJSON('["self-hosted","linux","aws"]') || 'ubuntu-latest' }}
     timeout-minutes: 30
     defaults:
       run:
@@ -56,6 +68,12 @@ jobs:
       # Default anyway (Configuration/Settings.cs) - set explicitly so the choice is visible here:
       # a trace is only captured for a failed @ui scenario (or one tagged @trace-always).
       TRACE_MODE: "OnFailureOnly"
+      # Report Portal: every run is sent there as a launch when AQA_RP_URL is set (see README).
+      RP__ENABLED: ${{ vars.AQA_RP_URL != '' }}
+      RP__SERVER__URL: ${{ vars.AQA_RP_URL }}
+      RP__SERVER__PROJECT: ${{ vars.AQA_RP_PROJECT }}
+      RP__SERVER__APIKEY: ${{ secrets.AQA_RP_API_KEY }}
+      RP__LAUNCH__NAME: ${{ (inputs.runner == 'aws' || (inputs.runner != 'github' && vars.AQA_RUNNER == 'aws')) && 'Group pre-order (AWS EC2 runner)' || 'Group pre-order (GitHub-hosted runner)' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -235,6 +253,9 @@ jobs:
                   print(f"- {name}")
               print()
           print("Reports, traces and the TRX are attached to this run as artifacts.")
+          rp = os.environ.get("RP__SERVER__URL")
+          if rp:
+              print(f"\nThe run is also in Report Portal: {rp}/ui/#{os.environ.get('RP__SERVER__PROJECT', '')}/launches/all")
           PY
 
       - name: Fail the job if tests failed

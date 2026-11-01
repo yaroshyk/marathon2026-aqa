@@ -48,6 +48,25 @@ covered by the backend unit tests).
 - Most scenarios book `GROUP_TABLE_ID`; only the two waiter scenarios book `TESTTABLE_ID`, so the waiter's reservation list,
   which the waiter screen loads in full, grows by two records per run at most.
 
+### Task with a star: Report Portal and a pipeline in the cloud
+
+- **Report Portal** runs on my AWS account: an EC2 instance in `eu-north-1` with the official `docker compose` setup,
+  project `marathon2026_aqa`. Every CI run is sent there as a launch (feature → scenario → Gherkin steps, with the
+  scenario's tags as attributes). The agent is `ReportPortal.Reqnroll`; it stays off unless `RP__ENABLED=true` and the
+  server settings come from the environment, so a local run without them reports nothing.
+- **The pipeline runs in AWS:** `aqa-tests.yml` runs on a self-hosted GitHub Actions runner on a second EC2 instance in
+  `eu-north-1` (labels `self-hosted, linux, aws`) while the repository variable `AQA_RUNNER` is `aws`. Without that variable
+  the same workflow uses a GitHub-hosted runner, so it keeps working after the AWS instances are removed. (AWS CodeBuild was
+  the first choice, but a new AWS account on the free plan has a limit of 0 concurrent builds.)
+
+| Setting | CI name | Meaning |
+|---|---|---|
+| `RP__ENABLED` | — (the workflow sets it when `AQA_RP_URL` is set) | send the run to Report Portal |
+| `RP__SERVER__URL` | variable `AQA_RP_URL` | Report Portal address |
+| `RP__SERVER__PROJECT` | variable `AQA_RP_PROJECT` | Report Portal project |
+| `RP__SERVER__APIKEY` | secret `AQA_RP_API_KEY` | API key of the Report Portal user the agent reports as |
+| — | variable `AQA_RUNNER` | `aws` runs the pipeline on the self-hosted runner in AWS |
+
 ### Run the homework suite
 
 ```bash
